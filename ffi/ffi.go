@@ -4,10 +4,12 @@ package ffi
 //
 //#include "ffi.h"
 //#include "stdlib.h"
+//#include "string.h"
 import "C"
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"unsafe"
 )
 
@@ -24,6 +26,10 @@ var FFI_TYPE_FLOAT = C.ffi_type_float
 var FFI_TYPE_DOUBLE = C.ffi_type_double
 var FFI_TYPE_POINTER = C.ffi_type_pointer
 
+var (
+	emptyType = reflect.TypeOf((*interface{})(nil)).Elem()
+)
+
 type Cif struct {
 	ptr  C.ffi_cif
 	fPtr *[0]byte
@@ -35,9 +41,8 @@ func NewCif(fPtr *[0]byte, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *Cif, e
 	nargs := len(aTypes)
 	var argsPtr **C.ffi_type
 	if nargs > 0 {
+
 		argsPtr = &aTypes[0]
-	} else {
-		argsPtr = nil
 	}
 	ret := C.ffi_prep_cif(
 		&cif.ptr,
@@ -52,21 +57,86 @@ func NewCif(fPtr *[0]byte, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *Cif, e
 	return cif, nil
 }
 
-func (cif *Cif) Call(args ...any) any {
-	var ret any
+func (cif *Cif) Call(args ...any) {
 	count := len(args)
+	var argp *unsafe.Pointer
+
+	fmt.Println(count)
 	argsRaw := make([]unsafe.Pointer, count)
 	for index, arg := range args {
 		argsRaw[index] = unsafe.Pointer(&arg)
+		// v := reflect.ValueOf(arg)
+		// switch v.Kind() {
+		// case reflect.String:
+		// 	//字符串
+		// 	s := C.CString(v.String())
+		// 	defer C.free(unsafe.Pointer(s))
+		// 	argsRaw[index] = unsafe.Pointer(s)
+		// case reflect.Int:
+		// 	//整数
+		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Int()))
+		// case reflect.Int8:
+		// 	//8位
+		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Int()))
+		// case reflect.Int16:
+		// 	//16位
+		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Int()))
+		// case reflect.Int32:
+		// 	//32位
+		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Int()))
+		// case reflect.Int64:
+		// 	//64位
+		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Int()))
+		// case reflect.Uint:
+		// 	//无符号
+		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Uint()))
+		// case reflect.Uint8:
+		// 	//8位无符号
+		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Uint()))
+		// case reflect.Uint16:
+		// 	//16位无符号
+		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Uint()))
+		// case reflect.Uint32:
+		// 	//32位无符号
+		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Uint()))
+		// case reflect.Uint64:
+		// 	//64位无符号
+		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Uint()))
+		// case reflect.Float32:
+		// 	//32位浮点
+		// 	argsRaw[index] = unsafe.Pointer(uintptr(math.Float32bits(float32(v.Float()))))
+		// case reflect.Float64:
+		// 	//64位浮点
+		// 	argsRaw[index] = unsafe.Pointer(uintptr(math.Float64bits(v.Float())))
+		// case reflect.Ptr:
+		// 	//指针
+		// 	argsRaw[index] = unsafe.Pointer(v.Pointer())
+		// case reflect.Slice:
+		// 	//切片
+		// 	if v.Len() > 0 {
+		// 		argsRaw[index] = unsafe.Pointer(v.Index(0).UnsafeAddr())
+		// 	}
+		// case reflect.Uintptr:
+		// 	//无符号整数指针
+		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Uint()))
+		// default:
+		// 	//其他类型 崩溃
+		// 	panic(fmt.Errorf("can't bind value of type %s", v.Type()))
+		// }
 	}
-	argsPtr := C.malloc(C.size_t(unsafe.Sizeof(argsRaw)))
-	*(*unsafe.Pointer)(argsPtr) = &argsRaw[0]
-	defer C.free(argsPtr)
+
+	if count > 0 {
+		argp = (*unsafe.Pointer)(&argsRaw[0])
+	}
+
+	ret := C.malloc(8)
+
 	C.ffi_call(
 		&cif.ptr,
 		cif.fPtr,
-		unsafe.Pointer(&ret),
-		argsPtr,
+		unsafe.Pointer(ret),
+		argp,
 	)
-	return ret
+	fmt.Println(*(*int)(ret))
+	C.free(ret)
 }

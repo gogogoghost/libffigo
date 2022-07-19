@@ -1,10 +1,6 @@
 package main
 
-import "C"
-
 import (
-	"fmt"
-
 	"github.com/gogogoghost/libffigo/dl"
 	"github.com/gogogoghost/libffigo/ffi"
 )
@@ -21,11 +17,10 @@ func main() {
 	cfi, err := ffi.NewCif(
 		f,
 		ffi.FFI_TYPE_SINT32,
+		&ffi.FFI_TYPE_SINT32,
 	)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(
-		cfi.Call(C.int(-10)),
-	)
+	cfi.Call(-100)
 }
