@@ -5,6 +5,7 @@ package ffi
 //#include "ffi.h"
 //#include "stdlib.h"
 //#include "string.h"
+//#include <stdint.h>
 import "C"
 import (
 	"errors"
@@ -26,6 +27,19 @@ var FFI_TYPE_FLOAT = C.ffi_type_float
 var FFI_TYPE_DOUBLE = C.ffi_type_double
 var FFI_TYPE_POINTER = C.ffi_type_pointer
 
+// var FFI_TYPE_VOID_PTR = &C.ffi_type_void
+// var FFI_TYPE_UINT8_PTR = &C.ffi_type_uint8
+// var FFI_TYPE_SINT8_PTR = &C.ffi_type_sint8
+// var FFI_TYPE_UINT16_PTR = &C.ffi_type_uint16
+// var FFI_TYPE_SINT16_PTR = &C.ffi_type_sint16
+// var FFI_TYPE_UINT32_PTR = &C.ffi_type_uint32
+// var FFI_TYPE_SINT32_PTR = &C.ffi_type_sint32
+// var FFI_TYPE_UINT64_PTR = &C.ffi_type_uint64
+// var FFI_TYPE_SINT64_PTR = &C.ffi_type_sint64
+// var FFI_TYPE_FLOAT_PTR = &C.ffi_type_float
+// var FFI_TYPE_DOUBLE_PTR = &C.ffi_type_double
+// var FFI_TYPE_POINTER_PTR = &C.ffi_type_pointer
+
 var (
 	emptyType = reflect.TypeOf((*interface{})(nil)).Elem()
 )
@@ -41,8 +55,8 @@ func NewCif(fPtr *[0]byte, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *Cif, e
 	nargs := len(aTypes)
 	var argsPtr **C.ffi_type
 	if nargs > 0 {
-
-		argsPtr = &aTypes[0]
+		argsPtr = AllocArrayOf(aTypes)
+		defer FreePtr(unsafe.Pointer(argsPtr))
 	}
 	ret := C.ffi_prep_cif(
 		&cif.ptr,
@@ -51,6 +65,7 @@ func NewCif(fPtr *[0]byte, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *Cif, e
 		&rType,
 		argsPtr,
 	)
+
 	if ret != C.FFI_OK {
 		return nil, errors.New(fmt.Sprintf("prep fail:%d", ret))
 	}
@@ -59,84 +74,43 @@ func NewCif(fPtr *[0]byte, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *Cif, e
 
 func (cif *Cif) Call(args ...any) {
 	count := len(args)
+	//参数指针
 	var argp *unsafe.Pointer
 
-	fmt.Println(count)
-	argsRaw := make([]unsafe.Pointer, count)
-	for index, arg := range args {
-		argsRaw[index] = unsafe.Pointer(&arg)
-		// v := reflect.ValueOf(arg)
-		// switch v.Kind() {
-		// case reflect.String:
-		// 	//字符串
-		// 	s := C.CString(v.String())
-		// 	defer C.free(unsafe.Pointer(s))
-		// 	argsRaw[index] = unsafe.Pointer(s)
-		// case reflect.Int:
-		// 	//整数
-		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Int()))
-		// case reflect.Int8:
-		// 	//8位
-		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Int()))
-		// case reflect.Int16:
-		// 	//16位
-		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Int()))
-		// case reflect.Int32:
-		// 	//32位
-		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Int()))
-		// case reflect.Int64:
-		// 	//64位
-		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Int()))
-		// case reflect.Uint:
-		// 	//无符号
-		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Uint()))
-		// case reflect.Uint8:
-		// 	//8位无符号
-		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Uint()))
-		// case reflect.Uint16:
-		// 	//16位无符号
-		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Uint()))
-		// case reflect.Uint32:
-		// 	//32位无符号
-		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Uint()))
-		// case reflect.Uint64:
-		// 	//64位无符号
-		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Uint()))
-		// case reflect.Float32:
-		// 	//32位浮点
-		// 	argsRaw[index] = unsafe.Pointer(uintptr(math.Float32bits(float32(v.Float()))))
-		// case reflect.Float64:
-		// 	//64位浮点
-		// 	argsRaw[index] = unsafe.Pointer(uintptr(math.Float64bits(v.Float())))
-		// case reflect.Ptr:
-		// 	//指针
-		// 	argsRaw[index] = unsafe.Pointer(v.Pointer())
-		// case reflect.Slice:
-		// 	//切片
-		// 	if v.Len() > 0 {
-		// 		argsRaw[index] = unsafe.Pointer(v.Index(0).UnsafeAddr())
-		// 	}
-		// case reflect.Uintptr:
-		// 	//无符号整数指针
-		// 	argsRaw[index] = unsafe.Pointer(uintptr(v.Uint()))
-		// default:
-		// 	//其他类型 崩溃
-		// 	panic(fmt.Errorf("can't bind value of type %s", v.Type()))
-		// }
-	}
-
 	if count > 0 {
-		argp = (*unsafe.Pointer)(&argsRaw[0])
-	}
+		//申请一片数组空间
+		arrPtr := AllocArray(count)
+		defer FreePtr(arrPtr)
+		//转换成指针数组
+		arr := (*[1 << 30]unsafe.Pointer)(arrPtr)
+		//给数组写入指对应C内存的地址
+		for index, arg := range args {
+			//把参数全部复制到C内存中 获取指针
+			fmt.Println("参数本来的值")
+			fmt.Println(arg)
+			ptr := AllocValOf(arg)
+			fmt.Println("这是参数拷贝后的值")
+			fmt.Println((*int)(unsafe.Pointer(ptr)))
+			uptr := unsafe.Pointer(ptr)
+			fmt.Println("这是参数拷贝后的地址")
+			PrintPtr(unsafe.Pointer(&ptr), 8)
 
-	ret := C.malloc(8)
+			defer FreePtr(uptr)
+			(*arr)[index] = uptr
+		}
+		argp = &((*arr)[0])
+		PrintPtr(unsafe.Pointer(argp), 16)
+	}
+	fmt.Println(argp)
+
+	var resPtrLocal uintptr
+	resPtr := unsafe.Pointer(AllocValOf(resPtrLocal))
+	defer FreePtr(resPtr)
 
 	C.ffi_call(
 		&cif.ptr,
 		cif.fPtr,
-		unsafe.Pointer(ret),
+		resPtr,
 		argp,
 	)
-	fmt.Println(*(*int)(ret))
-	C.free(ret)
 }
