@@ -17,7 +17,7 @@ func TestAny(*testing.T) {
 	ffi.PrintPtr(unsafe.Pointer(ptr), 8)
 	fmt.Println("变量地址==========")
 	ffi.PrintPtr(unsafe.Pointer(&ptr), 8)
-	fmt.Println((*int)(ffi.AllocValOf(b)))
+	fmt.Println(*(*int)(ffi.AllocValOf(b)))
 }
 
 func BenchmarkFFI(*testing.B) {

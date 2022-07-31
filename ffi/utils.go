@@ -1,7 +1,6 @@
 package ffi
 
-//#include "stdlib.h"
-//#include "string.h"
+//#include <stdlib.h>
 import "C"
 import (
 	"encoding/hex"
@@ -65,21 +64,13 @@ func AllocValOf(src any) unsafe.Pointer {
 	//获取src的指针 转换成数组
 	srcArr := (*[1 << 30]byte)(dataPtr)
 	//按字节加上偏移量拷贝
-	// fmt.Println(realSize)
-	// copy(realPtr[0:realSize], realSrcPtr[0:realSize])
-	for i := 0; i < int(realSize); i++ {
-		// fmt.Println((*srcArr)[i])
-		(*destArr)[i] = (*srcArr)[i]
-	}
+	copy(destArr[0:realSize], srcArr[0:realSize])
 	return destPtr
 }
 
-//申请一片和对象一样大的空间
-func AllocVal(src any) unsafe.Pointer {
-	val := reflect.ValueOf(src)
-	//获取src实际大小
-	realSize := val.Type().Size()
-	ptr := C.malloc(C.size_t(realSize))
+//申请一片指定大小的空间
+func Alloc(size int) unsafe.Pointer {
+	ptr := C.malloc(C.size_t(size))
 	return ptr
 }
 
@@ -96,4 +87,36 @@ func PrintPtr(ptr unsafe.Pointer, size int) {
 		buf = append(buf, (*arr)[i])
 	}
 	fmt.Println(hex.EncodeToString(buf))
+}
+
+//把any[] 转void*
+func AllocParams(args []any) *unsafe.Pointer {
+	count := len(args)
+	var argp *unsafe.Pointer
+	//申请一片数组空间
+	arrPtr := AllocArray(count)
+	// defer FreePtr(arrPtr)
+	//转换成指针数组
+	arr := (*[1 << 30]unsafe.Pointer)(arrPtr)
+	//给数组写入指对应C内存的地址
+	for index, arg := range args {
+		ptr := AllocValOf(arg)
+		// defer FreePtr(ptr)
+		(*arr)[index] = ptr
+	}
+	argp = &((*arr)[0])
+	return argp
+}
+
+//释放void** 并将数组内的所有内存释放
+func FreeParams(ptr *unsafe.Pointer) {
+	arrPtr := unsafe.Pointer(ptr)
+	arr := (*[1 << 30]unsafe.Pointer)(arrPtr)
+	for _, p := range arr {
+		if uintptr(p) == 0 {
+			break
+		}
+		C.free(p)
+	}
+	C.free(arrPtr)
 }

@@ -7,8 +7,8 @@ import (
 
 //#cgo LDFLAGS: -ldl
 //
-//#include "dlfcn.h"
-//#include "stdlib.h"
+//#include <dlfcn.h>
+//#include <stdlib.h>
 import "C"
 
 const (
@@ -41,12 +41,12 @@ func Open(name string, flag int) (lib *Lib, err error) {
 	}, nil
 }
 
-func (lib *Lib) Sym(name string) (*[0]byte, error) {
+func (lib *Lib) Sym(name string) (unsafe.Pointer, error) {
 	str := C.CString(name)
 	defer C.free(unsafe.Pointer(str))
 	ptr := C.dlsym(lib.ptr, str)
 	if ptr == nil {
 		return nil, dlerror()
 	}
-	return (*[0]byte)(ptr), nil
+	return ptr, nil
 }

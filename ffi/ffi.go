@@ -2,15 +2,21 @@ package ffi
 
 //#cgo LDFLAGS: -lffi
 //
-//#include "ffi.h"
-//#include "stdlib.h"
-//#include "string.h"
-//#include <stdint.h>
+//#include <ffi.h>
+/*
+#include <stdio.h>
+void test(ffi_cif *cif,void(*func)(void),void *result,void **args){
+	// int* arg = (int*)(args[0]);
+	// printf("%d\n",*arg);
+	// int* res = (int*)result;
+	// *res=999;
+	ffi_call(cif,func,result,args);
+}
+*/
 import "C"
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"unsafe"
 )
 
@@ -27,41 +33,29 @@ var FFI_TYPE_FLOAT = C.ffi_type_float
 var FFI_TYPE_DOUBLE = C.ffi_type_double
 var FFI_TYPE_POINTER = C.ffi_type_pointer
 
-// var FFI_TYPE_VOID_PTR = &C.ffi_type_void
-// var FFI_TYPE_UINT8_PTR = &C.ffi_type_uint8
-// var FFI_TYPE_SINT8_PTR = &C.ffi_type_sint8
-// var FFI_TYPE_UINT16_PTR = &C.ffi_type_uint16
-// var FFI_TYPE_SINT16_PTR = &C.ffi_type_sint16
-// var FFI_TYPE_UINT32_PTR = &C.ffi_type_uint32
-// var FFI_TYPE_SINT32_PTR = &C.ffi_type_sint32
-// var FFI_TYPE_UINT64_PTR = &C.ffi_type_uint64
-// var FFI_TYPE_SINT64_PTR = &C.ffi_type_sint64
-// var FFI_TYPE_FLOAT_PTR = &C.ffi_type_float
-// var FFI_TYPE_DOUBLE_PTR = &C.ffi_type_double
-// var FFI_TYPE_POINTER_PTR = &C.ffi_type_pointer
-
-var (
-	emptyType = reflect.TypeOf((*interface{})(nil)).Elem()
-)
-
 type Cif struct {
-	ptr  C.ffi_cif
-	fPtr *[0]byte
+	ptr        *C.ffi_cif
+	fPtr       unsafe.Pointer
+	args_count int
 }
 
-func NewCif(fPtr *[0]byte, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *Cif, err error) {
-	cif = &Cif{}
+func NewCif(fPtr unsafe.Pointer, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *Cif, err error) {
+	//申请空间 把cif存到C内存中 对象销毁时请释放！！！！
+	empty_cif := C.ffi_cif{}
+	cif = &Cif{
+		ptr: (*C.ffi_cif)(AllocValOf(empty_cif)),
+	}
 	cif.fPtr = fPtr
-	nargs := len(aTypes)
+	cif.args_count = len(aTypes)
 	var argsPtr **C.ffi_type
-	if nargs > 0 {
+	if cif.args_count > 0 {
 		argsPtr = AllocArrayOf(aTypes)
 		defer FreePtr(unsafe.Pointer(argsPtr))
 	}
 	ret := C.ffi_prep_cif(
-		&cif.ptr,
+		cif.ptr,
 		C.FFI_DEFAULT_ABI,
-		C.uint(nargs),
+		C.uint(cif.args_count),
 		&rType,
 		argsPtr,
 	)
@@ -72,44 +66,23 @@ func NewCif(fPtr *[0]byte, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *Cif, e
 	return cif, nil
 }
 
-func (cif *Cif) Call(args ...any) {
-	count := len(args)
-	//参数指针
-	var argp *unsafe.Pointer
-
-	if count > 0 {
-		//申请一片数组空间
-		arrPtr := AllocArray(count)
-		defer FreePtr(arrPtr)
-		//转换成指针数组
-		arr := (*[1 << 30]unsafe.Pointer)(arrPtr)
-		//给数组写入指对应C内存的地址
-		for index, arg := range args {
-			//把参数全部复制到C内存中 获取指针
-			fmt.Println("参数本来的值")
-			fmt.Println(arg)
-			ptr := AllocValOf(arg)
-			fmt.Println("这是参数拷贝后的值")
-			fmt.Println((*int)(unsafe.Pointer(ptr)))
-			uptr := unsafe.Pointer(ptr)
-			fmt.Println("这是参数拷贝后的地址")
-			PrintPtr(unsafe.Pointer(&ptr), 8)
-
-			defer FreePtr(uptr)
-			(*arr)[index] = uptr
-		}
-		argp = &((*arr)[0])
-		PrintPtr(unsafe.Pointer(argp), 16)
+func (cif *Cif) Call(resPtr unsafe.Pointer, args ...any) {
+	if len(args) != cif.args_count {
+		panic("Wrong args count")
 	}
-	fmt.Println(argp)
 
-	var resPtrLocal uintptr
-	resPtr := unsafe.Pointer(AllocValOf(resPtrLocal))
-	defer FreePtr(resPtr)
+	argp := AllocParams(args)
+	defer FreeParams(argp)
 
-	C.ffi_call(
-		&cif.ptr,
-		cif.fPtr,
+	// fmt.Println(C.call_test(
+
+	// 	(*[0]byte)(cif.fPtr),
+	// 	argp,
+	// ))
+	// C.test(argp)
+	C.test(
+		cif.ptr,
+		(*[0]byte)(cif.fPtr),
 		resPtr,
 		argp,
 	)
