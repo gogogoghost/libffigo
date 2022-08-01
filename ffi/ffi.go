@@ -88,13 +88,15 @@ func NewCif(fPtr unsafe.Pointer, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *
 }
 
 //调用函数
-func (cif *Cif) Call(resPtr unsafe.Pointer, args ...any) {
+func (cif *Cif) Call(args ...any) unsafe.Pointer {
 	if len(args) != cif.args_count {
 		panic("Wrong args count")
 	}
-
+	//内存复制到C空间
 	argp := AllocParams(args)
 	defer FreeParams(argp)
+	//申请一个8字节大小的地址 以便最大能存储64位数据
+	resPtr := Alloc(8)
 
 	C.ffi_call(
 		cif.ptr,
@@ -102,6 +104,7 @@ func (cif *Cif) Call(resPtr unsafe.Pointer, args ...any) {
 		resPtr,
 		argp,
 	)
+	return resPtr
 }
 
 //获取dl错误
