@@ -14,19 +14,61 @@ import (
 )
 
 //所有FFI参数类型
+type FFI_TYPE struct {
+	typePtr *C.ffi_type
+	size    int
+}
+
+//变量类型及长度
 var (
-	FFI_TYPE_VOID    = C.ffi_type_void
-	FFI_TYPE_UINT8   = C.ffi_type_uint8
-	FFI_TYPE_SINT8   = C.ffi_type_sint8
-	FFI_TYPE_UINT16  = C.ffi_type_uint16
-	FFI_TYPE_SINT16  = C.ffi_type_sint16
-	FFI_TYPE_UINT32  = C.ffi_type_uint32
-	FFI_TYPE_SINT32  = C.ffi_type_sint32
-	FFI_TYPE_UINT64  = C.ffi_type_uint64
-	FFI_TYPE_SINT64  = C.ffi_type_sint64
-	FFI_TYPE_FLOAT   = C.ffi_type_float
-	FFI_TYPE_DOUBLE  = C.ffi_type_double
-	FFI_TYPE_POINTER = C.ffi_type_pointer
+	TYPE_VOID = FFI_TYPE{
+		typePtr: &C.ffi_type_void,
+		size:    0,
+	}
+	TYPE_UINT8 = FFI_TYPE{
+		typePtr: &C.ffi_type_uint8,
+		size:    1,
+	}
+	TYPE_SINT8 = FFI_TYPE{
+		typePtr: &C.ffi_type_sint8,
+		size:    1,
+	}
+	TYPE_UINT16 = FFI_TYPE{
+		typePtr: &C.ffi_type_uint16,
+		size:    2,
+	}
+	TYPE_SINT16 = FFI_TYPE{
+		typePtr: &C.ffi_type_sint16,
+		size:    2,
+	}
+	TYPE_UINT32 = FFI_TYPE{
+		typePtr: &C.ffi_type_uint32,
+		size:    4,
+	}
+	TYPE_SINT32 = FFI_TYPE{
+		typePtr: &C.ffi_type_sint32,
+		size:    4,
+	}
+	TYPE_UINT64 = FFI_TYPE{
+		typePtr: &C.ffi_type_uint64,
+		size:    8,
+	}
+	TYPE_SINT64 = FFI_TYPE{
+		typePtr: &C.ffi_type_sint64,
+		size:    8,
+	}
+	TYPE_FLOAT = FFI_TYPE{
+		typePtr: &C.ffi_type_float,
+		size:    4,
+	}
+	TYPE_DOUBLE = FFI_TYPE{
+		typePtr: &C.ffi_type_double,
+		size:    8,
+	}
+	TYPE_POINTER = FFI_TYPE{
+		typePtr: &C.ffi_type_pointer,
+		size:    int(PtrSize),
+	}
 )
 
 //dlopen flag
@@ -46,24 +88,29 @@ type Lib struct {
 
 //描述一个Cif
 type Cif struct {
-	ptr        *C.ffi_cif
-	fPtr       unsafe.Pointer
-	args_count int
+	ptr       *C.ffi_cif
+	fPtr      unsafe.Pointer
+	argsCount int
+	resType   *FFI_TYPE
 }
 
 //构造一个cif
-func NewCif(fPtr unsafe.Pointer, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *Cif, err error) {
+func NewCif(fPtr unsafe.Pointer, rType *FFI_TYPE, aTypes ...*FFI_TYPE) (cif *Cif, err error) {
 	//申请空间 把cif存到C内存中
 	empty_cif := C.ffi_cif{}
 	cif = &Cif{
 		ptr: (*C.ffi_cif)(AllocValOf(empty_cif)),
 	}
 	cif.fPtr = fPtr
-	cif.args_count = len(aTypes)
+	cif.argsCount = len(aTypes)
 	var argsPtr **C.ffi_type
-	if cif.args_count > 0 {
+	if cif.argsCount > 0 {
 		//这片参数空间在对象销毁时释放
-		argsPtr = AllocArrayOf(aTypes)
+		typesArr := make([]*C.ffi_type, cif.argsCount)
+		for index, aType := range aTypes {
+			typesArr[index] = aType.typePtr
+		}
+		argsPtr = AllocArrayOf(typesArr)
 	}
 	//对象销毁时释放内存
 	runtime.SetFinalizer(cif, func(cif *Cif) {
@@ -74,11 +121,13 @@ func NewCif(fPtr unsafe.Pointer, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *
 			FreePtr(unsafe.Pointer(argsPtr))
 		}
 	})
+	//保存一下返回类型
+	cif.resType = rType
 	ret := C.ffi_prep_cif(
 		cif.ptr,
 		C.FFI_DEFAULT_ABI,
-		C.uint(cif.args_count),
-		&rType,
+		C.uint(cif.argsCount),
+		rType.typePtr,
 		argsPtr,
 	)
 	if ret != C.FFI_OK {
@@ -89,22 +138,41 @@ func NewCif(fPtr unsafe.Pointer, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *
 
 //调用函数
 func (cif *Cif) Call(args ...any) unsafe.Pointer {
-	if len(args) != cif.args_count {
+	if len(args) != cif.argsCount {
 		panic("Wrong args count")
 	}
 	//内存复制到C空间
 	argp := AllocParams(args)
 	defer FreeParams(argp)
-	//申请一个8字节大小的地址 以便最大能存储64位数据
-	resPtr := Alloc(8)
-
+	//返回类型默认为nil
+	var resPtr unsafe.Pointer
+	//返回类型不为void时，申请内存
+	resSize := cif.resType.size
+	//go空间的字节数组 用于拷贝返回数据到此
+	var resArr []byte
+	if resSize > 0 {
+		//申请用于存放临时返回值的空间
+		resPtr = Alloc(resSize)
+		defer FreePtr(resPtr)
+		//再申请一片go空间 存放拷贝后的数据
+		resArr = make([]byte, resSize)
+	}
+	//发起调用
 	C.ffi_call(
 		cif.ptr,
 		(*[0]byte)(cif.fPtr),
 		resPtr,
 		argp,
 	)
-	return resPtr
+	if resSize > 0 {
+		//返回复制后的地址
+		tmpArr := (*[1 << 30]byte)(resPtr)
+		copy(resArr[:], (*tmpArr)[0:resSize])
+		return unsafe.Pointer(&resArr[0])
+	} else {
+		//返回nil
+		return resPtr
+	}
 }
 
 //获取dl错误
@@ -127,7 +195,7 @@ func Open(name string, flag int) (lib *Lib, err error) {
 }
 
 //dlsym
-func (lib *Lib) Sym(name string, rType C.ffi_type, aTypes ...*C.ffi_type) (*Cif, error) {
+func (lib *Lib) Sym(name string, rType *FFI_TYPE, aTypes ...*FFI_TYPE) (*Cif, error) {
 	//查找函数指针
 	str := C.CString(name)
 	defer C.free(unsafe.Pointer(str))
