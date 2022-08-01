@@ -1,21 +1,10 @@
 package ffi
 
-//#cgo LDFLAGS: -lffi
+//#cgo LDFLAGS: -lffi -ldl
 //
 //#include <ffi.h>
-/*
-#include <stdio.h>
-void ffi_call_test(ffi_cif *cif,void(*func)(void),void *result,void **args){
-	// int* arg = (int*)(args[0]);
-	// printf("%d\n",*arg);
-	// int* res = (int*)result;
-	// *res=999;
-	ffi_call(cif,func,result,args);
-}
-void ffi_prep_cif_test(ffi_type **types){
-	printf("%d\n",types[0]);
-}
-*/
+//#include <dlfcn.h>
+//#include <stdlib.h>
 import "C"
 import (
 	"errors"
@@ -43,24 +32,41 @@ type Cif struct {
 	args_count int
 }
 
+const (
+	RTLD_LAZY     = int(C.RTLD_LAZY)
+	RTLD_NOW      = int(C.RTLD_NOW)
+	RTLD_GLOBAL   = int(C.RTLD_GLOBAL)
+	RTLD_LOCAL    = int(C.RTLD_LOCAL)
+	RTLD_NODELETE = int(C.RTLD_NODELETE)
+	RTLD_NOLOAD   = int(C.RTLD_NOLOAD)
+)
+
+type Lib struct {
+	ptr unsafe.Pointer
+}
+
 func NewCif(fPtr unsafe.Pointer, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *Cif, err error) {
 	//申请空间 把cif存到C内存中
 	empty_cif := C.ffi_cif{}
 	cif = &Cif{
 		ptr: (*C.ffi_cif)(AllocValOf(empty_cif)),
 	}
-	//对象销毁时释放内存
-	runtime.SetFinalizer(cif, func(cif *Cif) {
-		FreePtr(unsafe.Pointer(cif.ptr))
-	})
 	cif.fPtr = fPtr
 	cif.args_count = len(aTypes)
 	var argsPtr **C.ffi_type
 	if cif.args_count > 0 {
+		//这片参数空间在对象销毁时释放
 		argsPtr = AllocArrayOf(aTypes)
-		defer FreePtr(unsafe.Pointer(argsPtr))
 	}
-	C.ffi_prep_cif_test(argsPtr)
+	//对象销毁时释放内存
+	runtime.SetFinalizer(cif, func(cif *Cif) {
+		//销毁cif内存
+		FreePtr(unsafe.Pointer(cif.ptr))
+		//销毁参数数组内存
+		if argsPtr != nil {
+			FreePtr(unsafe.Pointer(argsPtr))
+		}
+	})
 	ret := C.ffi_prep_cif(
 		cif.ptr,
 		C.FFI_DEFAULT_ABI,
@@ -68,7 +74,6 @@ func NewCif(fPtr unsafe.Pointer, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *
 		&rType,
 		argsPtr,
 	)
-
 	if ret != C.FFI_OK {
 		return nil, errors.New(fmt.Sprintf("prep fail:%d", ret))
 	}
@@ -83,16 +88,43 @@ func (cif *Cif) Call(resPtr unsafe.Pointer, args ...any) {
 	argp := AllocParams(args)
 	defer FreeParams(argp)
 
-	// fmt.Println(C.call_test(
-
-	// 	(*[0]byte)(cif.fPtr),
-	// 	argp,
-	// ))
-	// C.test(argp)
-	C.ffi_call_test(
+	C.ffi_call(
 		cif.ptr,
 		(*[0]byte)(cif.fPtr),
 		resPtr,
 		argp,
 	)
+}
+
+func dlerror() error {
+	s := C.dlerror()
+	return errors.New(C.GoString(s))
+}
+
+func Open(name string, flag int) (lib *Lib, err error) {
+	str := C.CString(name)
+	defer C.free(unsafe.Pointer(str))
+	ptr := C.dlopen(str, C.int(flag))
+	if ptr == nil {
+		return nil, dlerror()
+	}
+	return &Lib{
+		ptr: ptr,
+	}, nil
+}
+
+func (lib *Lib) Sym(name string, rType C.ffi_type, aTypes ...*C.ffi_type) (*Cif, error) {
+	//查找函数指针
+	str := C.CString(name)
+	defer C.free(unsafe.Pointer(str))
+	ptr := C.dlsym(lib.ptr, str)
+	if ptr == nil {
+		return nil, dlerror()
+	}
+	//将函数指针使用ffi初始化
+	cif, err := NewCif(ptr, rType, aTypes...)
+	if err != nil {
+		return nil, err
+	}
+	return cif, nil
 }
