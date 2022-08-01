@@ -19,6 +19,11 @@ type FFI_TYPE struct {
 	size    int
 }
 
+//返回值类型
+type FFI_RES struct {
+	ptr unsafe.Pointer
+}
+
 //变量类型及长度
 var (
 	TYPE_VOID = FFI_TYPE{
@@ -137,7 +142,7 @@ func NewCif(fPtr unsafe.Pointer, rType *FFI_TYPE, aTypes ...*FFI_TYPE) (cif *Cif
 }
 
 //调用函数
-func (cif *Cif) Call(args ...any) unsafe.Pointer {
+func (cif *Cif) Call(args ...any) *FFI_RES {
 	if len(args) != cif.argsCount {
 		panic("Wrong args count")
 	}
@@ -167,11 +172,13 @@ func (cif *Cif) Call(args ...any) unsafe.Pointer {
 	if resSize > 0 {
 		//返回复制后的地址
 		tmpArr := (*[1 << 30]byte)(resPtr)
+		//给res写入数据
 		copy(resArr[:], (*tmpArr)[0:resSize])
-		return unsafe.Pointer(&resArr[0])
+		return &FFI_RES{
+			ptr: unsafe.Pointer(&resArr[0]),
+		}
 	} else {
-		//返回nil
-		return resPtr
+		return nil
 	}
 }
 
@@ -209,4 +216,59 @@ func (lib *Lib) Sym(name string, rType *FFI_TYPE, aTypes ...*FFI_TYPE) (*Cif, er
 		return nil, err
 	}
 	return cif, nil
+}
+
+//返回指针
+func (res *FFI_RES) Pointer() unsafe.Pointer {
+	return *(*unsafe.Pointer)(res.ptr)
+}
+
+//返回uint8
+func (res *FFI_RES) Uint8() uint8 {
+	return *(*uint8)(res.ptr)
+}
+
+//返回int8
+func (res *FFI_RES) Int8() int8 {
+	return *(*int8)(res.ptr)
+}
+
+//返回uint16
+func (res *FFI_RES) Uint16() uint16 {
+	return *(*uint16)(res.ptr)
+}
+
+//返回int16
+func (res *FFI_RES) Int16() int16 {
+	return *(*int16)(res.ptr)
+}
+
+//返回uint32
+func (res *FFI_RES) Uint32() uint32 {
+	return *(*uint32)(res.ptr)
+}
+
+//返回int32
+func (res *FFI_RES) Int32() int32 {
+	return *(*int32)(res.ptr)
+}
+
+//返回uint64
+func (res *FFI_RES) Uint64() uint64 {
+	return *(*uint64)(res.ptr)
+}
+
+//返回int64
+func (res *FFI_RES) Int64() int64 {
+	return *(*int64)(res.ptr)
+}
+
+//返回float32
+func (res *FFI_RES) Float() float32 {
+	return *(*float32)(res.ptr)
+}
+
+//返回float64
+func (res *FFI_RES) Double() float64 {
+	return *(*float64)(res.ptr)
 }
