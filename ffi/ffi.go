@@ -2,9 +2,9 @@ package ffi
 
 //#cgo LDFLAGS: -lffi -ldl
 //
-//#include <ffi.h>
 //#include <dlfcn.h>
 //#include <stdlib.h>
+//#include <ffi.h>
 import "C"
 import (
 	"errors"
@@ -13,25 +13,23 @@ import (
 	"unsafe"
 )
 
-var FFI_TYPE_VOID = C.ffi_type_void
-var FFI_TYPE_UINT8 = C.ffi_type_uint8
-var FFI_TYPE_SINT8 = C.ffi_type_sint8
-var FFI_TYPE_UINT16 = C.ffi_type_uint16
-var FFI_TYPE_SINT16 = C.ffi_type_sint16
-var FFI_TYPE_UINT32 = C.ffi_type_uint32
-var FFI_TYPE_SINT32 = C.ffi_type_sint32
-var FFI_TYPE_UINT64 = C.ffi_type_uint64
-var FFI_TYPE_SINT64 = C.ffi_type_sint64
-var FFI_TYPE_FLOAT = C.ffi_type_float
-var FFI_TYPE_DOUBLE = C.ffi_type_double
-var FFI_TYPE_POINTER = C.ffi_type_pointer
+//所有FFI参数类型
+var (
+	FFI_TYPE_VOID    = C.ffi_type_void
+	FFI_TYPE_UINT8   = C.ffi_type_uint8
+	FFI_TYPE_SINT8   = C.ffi_type_sint8
+	FFI_TYPE_UINT16  = C.ffi_type_uint16
+	FFI_TYPE_SINT16  = C.ffi_type_sint16
+	FFI_TYPE_UINT32  = C.ffi_type_uint32
+	FFI_TYPE_SINT32  = C.ffi_type_sint32
+	FFI_TYPE_UINT64  = C.ffi_type_uint64
+	FFI_TYPE_SINT64  = C.ffi_type_sint64
+	FFI_TYPE_FLOAT   = C.ffi_type_float
+	FFI_TYPE_DOUBLE  = C.ffi_type_double
+	FFI_TYPE_POINTER = C.ffi_type_pointer
+)
 
-type Cif struct {
-	ptr        *C.ffi_cif
-	fPtr       unsafe.Pointer
-	args_count int
-}
-
+//dlopen flag
 const (
 	RTLD_LAZY     = int(C.RTLD_LAZY)
 	RTLD_NOW      = int(C.RTLD_NOW)
@@ -41,8 +39,16 @@ const (
 	RTLD_NOLOAD   = int(C.RTLD_NOLOAD)
 )
 
+//描述一个dlopen 的 library
 type Lib struct {
 	ptr unsafe.Pointer
+}
+
+//描述一个Cif
+type Cif struct {
+	ptr        *C.ffi_cif
+	fPtr       unsafe.Pointer
+	args_count int
 }
 
 func NewCif(fPtr unsafe.Pointer, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *Cif, err error) {

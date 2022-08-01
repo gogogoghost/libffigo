@@ -22,9 +22,11 @@ func main() {
 		panic(err)
 	}
 	//申请8字节内存
-	resPtr := ffi.Alloc(8)
+	var res int
+	resPtr := ffi.AllocValOf(res)
 	defer ffi.FreePtr(resPtr)
 	//调用函数
-	f.Call(resPtr, -10086)
-	fmt.Println(*(*int)(resPtr))
+	f.Call(resPtr, -9527)
+	res = *(*int)(resPtr)
+	fmt.Println(res)
 }
