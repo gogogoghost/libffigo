@@ -51,6 +51,7 @@ type Cif struct {
 	args_count int
 }
 
+//构造一个cif
 func NewCif(fPtr unsafe.Pointer, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *Cif, err error) {
 	//申请空间 把cif存到C内存中
 	empty_cif := C.ffi_cif{}
@@ -86,6 +87,7 @@ func NewCif(fPtr unsafe.Pointer, rType C.ffi_type, aTypes ...*C.ffi_type) (cif *
 	return cif, nil
 }
 
+//调用函数
 func (cif *Cif) Call(resPtr unsafe.Pointer, args ...any) {
 	if len(args) != cif.args_count {
 		panic("Wrong args count")
@@ -102,11 +104,13 @@ func (cif *Cif) Call(resPtr unsafe.Pointer, args ...any) {
 	)
 }
 
+//获取dl错误
 func dlerror() error {
 	s := C.dlerror()
 	return errors.New(C.GoString(s))
 }
 
+//dlopen
 func Open(name string, flag int) (lib *Lib, err error) {
 	str := C.CString(name)
 	defer C.free(unsafe.Pointer(str))
@@ -119,6 +123,7 @@ func Open(name string, flag int) (lib *Lib, err error) {
 	}, nil
 }
 
+//dlsym
 func (lib *Lib) Sym(name string, rType C.ffi_type, aTypes ...*C.ffi_type) (*Cif, error) {
 	//查找函数指针
 	str := C.CString(name)
