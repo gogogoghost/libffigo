@@ -2,7 +2,6 @@ package main_test
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
 	"github.com/gogogoghost/libffigo/ffi"
@@ -58,8 +57,6 @@ func TestMyLib(t *testing.T) {
 	f := lib.SymMust("getNum", ffi.SINT32, ffi.PTR)
 	res := f.Call(numOnC)
 	fmt.Println(res.Int32())
-}
-
-func TestKind(t *testing.T) {
-	println(reflect.Pointer)
+	f2 := lib.SymMust("getStr", ffi.PTR)
+	fmt.Println(f2.Call().String())
 }

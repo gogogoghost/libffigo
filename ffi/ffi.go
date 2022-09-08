@@ -281,3 +281,9 @@ func (res *FFI_RES) Float() float32 {
 func (res *FFI_RES) Double() float64 {
 	return *(*float64)(res.ptr)
 }
+
+// 返回String
+func (res *FFI_RES) String() string {
+	ptr := (*C.char)(res.Pointer())
+	return C.GoString(ptr)
+}
