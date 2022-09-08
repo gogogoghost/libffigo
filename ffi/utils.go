@@ -39,8 +39,8 @@ func AllocArray(size int) unsafe.Pointer {
 	//生成一个数组 长度指针字节*长度
 	ptr := C.malloc(C.size_t(int(PtrSize) * (size + 1)))
 	//数组最后一位填0
-	arr := (*[1 << 30]uint64)(ptr)
-	(*arr)[size] = 0
+	arr := (*[1 << 30]uintptr)(ptr)
+	(*arr)[size] = uintptr(0)
 	return ptr
 }
 
@@ -50,12 +50,17 @@ func GetPtrFromAny(ptr *any) unsafe.Pointer {
 	return unsafe.Pointer(anyPtr.dataPtr)
 }
 
-// 转换一个指针
+// 转换一个指针 传入any 整个复制到C去 返回指针
 func AllocValOf(src any) unsafe.Pointer {
 	//获取实际指向的数据
 	dataPtr := GetPtrFromAny(&src)
 	//获取反射
 	val := reflect.ValueOf(src)
+	if val.Kind() == reflect.UnsafePointer || val.Kind() == reflect.Pointer {
+		//如果类型为指针，dataPtr取出来其实就是指针内容
+		ptrValue := uintptr(dataPtr)
+		dataPtr = unsafe.Pointer(&ptrValue)
+	}
 	//获取src实际大小
 	realSize := val.Type().Size()
 	//申请空间
@@ -95,11 +100,11 @@ func AllocParams(args []any) *unsafe.Pointer {
 	var argp *unsafe.Pointer
 	//申请一片数组空间
 	arrPtr := AllocArray(count)
-	// defer FreePtr(arrPtr)
 	//转换成指针数组
 	arr := (*[1 << 30]unsafe.Pointer)(arrPtr)
 	//给数组写入指对应C内存的地址
 	for index, arg := range args {
+		// 给每个变量单独申请空间
 		ptr := AllocValOf(arg)
 		// defer FreePtr(ptr)
 		(*arr)[index] = ptr

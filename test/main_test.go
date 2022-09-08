@@ -2,8 +2,8 @@ package main_test
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
-	"unsafe"
 
 	"github.com/gogogoghost/libffigo/ffi"
 )
@@ -19,8 +19,10 @@ func TestAny(*testing.T) {
 
 	ctx := Udev_new.Call().Pointer()
 	println(ctx)
+	println("start call=============")
 	enumer := Udev_enumerate_new.Call(ctx).Pointer()
 	println(enumer)
+	println("start call2=============")
 	Udev_enumerate_scan_devices.Call(enumer)
 }
 
@@ -35,13 +37,29 @@ func TestAbs(t *testing.T) {
 }
 
 func TestPtr(t *testing.T) {
-	num := 99999999999
+	num := 64
+
 	numPtr := &num
-	tmpArr := (*[1 << 30]byte)(unsafe.Pointer(numPtr))
-	arr := make([]byte, ffi.PtrSize)
-	for i := 0; i < int(ffi.PtrSize); i++ {
-		arr[i] = tmpArr[i]
+	println(numPtr)
+	numPtr2 := ffi.AllocValOf(numPtr)
+	println(*(**int)(numPtr2))
+	println(*(*(**int)(numPtr2)))
+}
+
+func TestMyLib(t *testing.T) {
+	lib, err := ffi.Open("/home/ghost/tmp/libtest.so", ffi.RTLD_LAZY)
+	if err != nil {
+		panic(err)
 	}
-	newPtr := (*int)(unsafe.Pointer(&arr[0]))
-	println(*newPtr)
+	num := 64
+	numOnC := ffi.AllocValOf(num)
+	f1 := lib.SymMust("addOne", ffi.SINT32, ffi.SINT32)
+	fmt.Println(f1.Call(num).Int32())
+	f := lib.SymMust("getNum", ffi.SINT32, ffi.PTR)
+	res := f.Call(numOnC)
+	fmt.Println(res.Int32())
+}
+
+func TestKind(t *testing.T) {
+	println(reflect.Pointer)
 }

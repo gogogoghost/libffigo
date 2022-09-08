@@ -141,7 +141,8 @@ func NewCif(fPtr unsafe.Pointer, rType *FFI_TYPE, aTypes ...*FFI_TYPE) (cif *Cif
 	return cif, nil
 }
 
-// 调用函数
+// 调用函数 any全部为指向数据的指针
+// 所以args为指针
 func (cif *Cif) Call(args ...any) *FFI_RES {
 	if len(args) != cif.argsCount {
 		panic("Wrong args count")
