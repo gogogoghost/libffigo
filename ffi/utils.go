@@ -9,19 +9,19 @@ import (
 	"unsafe"
 )
 
-//C语言空指针
+// C语言空指针
 const NilPtr uintptr = 0
 
-//一个指针长度
+// 一个指针长度
 var PtrSize = unsafe.Sizeof(NilPtr)
 
-//any类型
+// any类型
 type AnyStruct struct {
 	typePtr uintptr
 	dataPtr uintptr
 }
 
-//[]T of go -> *T of C 仅支持转换指针
+// []T of go -> *T of C 仅支持转换指针
 func AllocArrayOf[T any](src []T) *T {
 	length := len(src)
 	ptr := AllocArray(length)
@@ -34,7 +34,7 @@ func AllocArrayOf[T any](src []T) *T {
 	return &arr[0]
 }
 
-//申请一个size大小的C指针数组空间 什么都不拷贝
+// 申请一个size大小的C指针数组空间 什么都不拷贝
 func AllocArray(size int) unsafe.Pointer {
 	//生成一个数组 长度指针字节*长度
 	ptr := C.malloc(C.size_t(int(PtrSize) * (size + 1)))
@@ -44,13 +44,13 @@ func AllocArray(size int) unsafe.Pointer {
 	return ptr
 }
 
-//从指针部分取出内容并生成新指针
+// 从指针部分取出内容并生成新指针
 func GetPtrFromAny(ptr *any) unsafe.Pointer {
 	anyPtr := (*AnyStruct)(unsafe.Pointer(ptr))
 	return unsafe.Pointer(anyPtr.dataPtr)
 }
 
-//转换一个指针
+// 转换一个指针
 func AllocValOf(src any) unsafe.Pointer {
 	//获取实际指向的数据
 	dataPtr := GetPtrFromAny(&src)
@@ -68,18 +68,18 @@ func AllocValOf(src any) unsafe.Pointer {
 	return destPtr
 }
 
-//申请一片指定大小的空间
+// 申请一片指定大小的空间
 func Alloc(size int) unsafe.Pointer {
 	ptr := C.malloc(C.size_t(size))
 	return ptr
 }
 
-//释放一个指针
+// 释放一个指针
 func FreePtr(ptr unsafe.Pointer) {
 	C.free(ptr)
 }
 
-//把一个指针指向的东西按字节数量
+// 把一个指针指向的东西按字节数量
 func PrintPtr(ptr unsafe.Pointer, size int) {
 	arr := (*[1 << 30]byte)(ptr)
 	var buf = []byte{}
@@ -89,7 +89,7 @@ func PrintPtr(ptr unsafe.Pointer, size int) {
 	fmt.Println(hex.EncodeToString(buf))
 }
 
-//把any[] 转void*
+// 把any[] 转void*
 func AllocParams(args []any) *unsafe.Pointer {
 	count := len(args)
 	var argp *unsafe.Pointer
@@ -108,7 +108,7 @@ func AllocParams(args []any) *unsafe.Pointer {
 	return argp
 }
 
-//释放void** 并将数组内的所有内存释放
+// 释放void** 并将数组内的所有内存释放
 func FreeParams(ptr *unsafe.Pointer) {
 	arrPtr := unsafe.Pointer(ptr)
 	arr := (*[1 << 30]unsafe.Pointer)(arrPtr)

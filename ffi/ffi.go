@@ -13,70 +13,70 @@ import (
 	"unsafe"
 )
 
-//所有FFI参数类型
+// 所有FFI参数类型
 type FFI_TYPE struct {
 	typePtr *C.ffi_type
 	size    int
 }
 
-//返回值类型
+// 返回值类型
 type FFI_RES struct {
 	ptr unsafe.Pointer
 }
 
-//变量类型及长度
+// 变量类型及长度
 var (
-	TYPE_VOID = FFI_TYPE{
+	VOID = &FFI_TYPE{
 		typePtr: &C.ffi_type_void,
 		size:    0,
 	}
-	TYPE_UINT8 = FFI_TYPE{
+	UINT8 = &FFI_TYPE{
 		typePtr: &C.ffi_type_uint8,
 		size:    1,
 	}
-	TYPE_SINT8 = FFI_TYPE{
+	SINT8 = &FFI_TYPE{
 		typePtr: &C.ffi_type_sint8,
 		size:    1,
 	}
-	TYPE_UINT16 = FFI_TYPE{
+	UINT16 = &FFI_TYPE{
 		typePtr: &C.ffi_type_uint16,
 		size:    2,
 	}
-	TYPE_SINT16 = FFI_TYPE{
+	SINT16 = &FFI_TYPE{
 		typePtr: &C.ffi_type_sint16,
 		size:    2,
 	}
-	TYPE_UINT32 = FFI_TYPE{
+	UINT32 = &FFI_TYPE{
 		typePtr: &C.ffi_type_uint32,
 		size:    4,
 	}
-	TYPE_SINT32 = FFI_TYPE{
+	SINT32 = &FFI_TYPE{
 		typePtr: &C.ffi_type_sint32,
 		size:    4,
 	}
-	TYPE_UINT64 = FFI_TYPE{
+	UINT64 = &FFI_TYPE{
 		typePtr: &C.ffi_type_uint64,
 		size:    8,
 	}
-	TYPE_SINT64 = FFI_TYPE{
+	SINT64 = &FFI_TYPE{
 		typePtr: &C.ffi_type_sint64,
 		size:    8,
 	}
-	TYPE_FLOAT = FFI_TYPE{
+	FLOAT = &FFI_TYPE{
 		typePtr: &C.ffi_type_float,
 		size:    4,
 	}
-	TYPE_DOUBLE = FFI_TYPE{
+	DOUBLE = &FFI_TYPE{
 		typePtr: &C.ffi_type_double,
 		size:    8,
 	}
-	TYPE_POINTER = FFI_TYPE{
+	PTR = &FFI_TYPE{
 		typePtr: &C.ffi_type_pointer,
 		size:    int(PtrSize),
 	}
 )
 
-//dlopen flag
+// dlopen flag
 const (
 	RTLD_LAZY     = int(C.RTLD_LAZY)
 	RTLD_NOW      = int(C.RTLD_NOW)
@@ -86,12 +86,12 @@ const (
 	RTLD_NOLOAD   = int(C.RTLD_NOLOAD)
 )
 
-//描述一个dlopen 的 library
+// 描述一个dlopen 的 library
 type Lib struct {
 	ptr unsafe.Pointer
 }
 
-//描述一个Cif
+// 描述一个Cif
 type Cif struct {
 	ptr       *C.ffi_cif
 	fPtr      unsafe.Pointer
@@ -99,7 +99,7 @@ type Cif struct {
 	resType   *FFI_TYPE
 }
 
-//构造一个cif
+// 构造一个cif
 func NewCif(fPtr unsafe.Pointer, rType *FFI_TYPE, aTypes ...*FFI_TYPE) (cif *Cif, err error) {
 	//申请空间 把cif存到C内存中
 	empty_cif := C.ffi_cif{}
@@ -141,7 +141,7 @@ func NewCif(fPtr unsafe.Pointer, rType *FFI_TYPE, aTypes ...*FFI_TYPE) (cif *Cif
 	return cif, nil
 }
 
-//调用函数
+// 调用函数
 func (cif *Cif) Call(args ...any) *FFI_RES {
 	if len(args) != cif.argsCount {
 		panic("Wrong args count")
@@ -182,13 +182,13 @@ func (cif *Cif) Call(args ...any) *FFI_RES {
 	}
 }
 
-//获取dl错误
+// 获取dl错误
 func dlerror() error {
 	s := C.dlerror()
 	return errors.New(C.GoString(s))
 }
 
-//dlopen
+// dlopen
 func Open(name string, flag int) (lib *Lib, err error) {
 	str := C.CString(name)
 	defer C.free(unsafe.Pointer(str))
@@ -201,7 +201,7 @@ func Open(name string, flag int) (lib *Lib, err error) {
 	}, nil
 }
 
-//dlsym
+// dlsym
 func (lib *Lib) Sym(name string, rType *FFI_TYPE, aTypes ...*FFI_TYPE) (*Cif, error) {
 	//查找函数指针
 	str := C.CString(name)
@@ -218,57 +218,65 @@ func (lib *Lib) Sym(name string, rType *FFI_TYPE, aTypes ...*FFI_TYPE) (*Cif, er
 	return cif, nil
 }
 
-//返回指针
+func (lib *Lib) SymMust(name string, rType *FFI_TYPE, aTypes ...*FFI_TYPE) *Cif {
+	cif, err := lib.Sym(name, rType, aTypes...)
+	if err != nil {
+		panic(err)
+	}
+	return cif
+}
+
+// 返回指针
 func (res *FFI_RES) Pointer() unsafe.Pointer {
 	return *(*unsafe.Pointer)(res.ptr)
 }
 
-//返回uint8
+// 返回uint8
 func (res *FFI_RES) Uint8() uint8 {
 	return *(*uint8)(res.ptr)
 }
 
-//返回int8
+// 返回int8
 func (res *FFI_RES) Int8() int8 {
 	return *(*int8)(res.ptr)
 }
 
-//返回uint16
+// 返回uint16
 func (res *FFI_RES) Uint16() uint16 {
 	return *(*uint16)(res.ptr)
 }
 
-//返回int16
+// 返回int16
 func (res *FFI_RES) Int16() int16 {
 	return *(*int16)(res.ptr)
 }
 
-//返回uint32
+// 返回uint32
 func (res *FFI_RES) Uint32() uint32 {
 	return *(*uint32)(res.ptr)
 }
 
-//返回int32
+// 返回int32
 func (res *FFI_RES) Int32() int32 {
 	return *(*int32)(res.ptr)
 }
 
-//返回uint64
+// 返回uint64
 func (res *FFI_RES) Uint64() uint64 {
 	return *(*uint64)(res.ptr)
 }
 
-//返回int64
+// 返回int64
 func (res *FFI_RES) Int64() int64 {
 	return *(*int64)(res.ptr)
 }
 
-//返回float32
+// 返回float32
 func (res *FFI_RES) Float() float32 {
 	return *(*float32)(res.ptr)
 }
 
-//返回float64
+// 返回float64
 func (res *FFI_RES) Double() float64 {
 	return *(*float64)(res.ptr)
 }
