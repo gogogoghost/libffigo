@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/gogogoghost/libffigo/ffi"
@@ -35,28 +36,7 @@ func TestAbs(t *testing.T) {
 	fmt.Println(res.Int32())
 }
 
-func TestPtr(t *testing.T) {
-	num := 64
-
-	numPtr := &num
-	println(numPtr)
-	numPtr2 := ffi.AllocValOf(numPtr)
-	println(*(**int)(numPtr2))
-	println(*(*(**int)(numPtr2)))
-}
-
-func TestMyLib(t *testing.T) {
-	lib, err := ffi.Open("/home/ghost/tmp/libtest.so", ffi.RTLD_LAZY)
-	if err != nil {
-		panic(err)
-	}
-	num := 64
-	numOnC := ffi.AllocValOf(num)
-	f1 := lib.SymMust("addOne", ffi.SINT32, ffi.SINT32)
-	fmt.Println(f1.Call(num).Int32())
-	f := lib.SymMust("getNum", ffi.SINT32, ffi.PTR)
-	res := f.Call(numOnC)
-	fmt.Println(res.Int32())
-	f2 := lib.SymMust("getStr", ffi.PTR)
-	fmt.Println(f2.Call().String())
+func TestType(t *testing.T) {
+	var out reflect.Type
+	fmt.Println(out)
 }

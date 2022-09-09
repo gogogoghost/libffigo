@@ -9,68 +9,69 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"runtime"
 	"unsafe"
 )
 
 // 所有FFI参数类型
-type FFI_TYPE struct {
+type Type struct {
 	typePtr *C.ffi_type
 	size    int
 }
 
 // 返回值类型
-type FFI_RES struct {
+type Result struct {
 	ptr unsafe.Pointer
 }
 
 // 变量类型及长度
 var (
-	VOID = &FFI_TYPE{
+	VOID = &Type{
 		typePtr: &C.ffi_type_void,
 		size:    0,
 	}
-	UINT8 = &FFI_TYPE{
+	UINT8 = &Type{
 		typePtr: &C.ffi_type_uint8,
 		size:    1,
 	}
-	SINT8 = &FFI_TYPE{
+	SINT8 = &Type{
 		typePtr: &C.ffi_type_sint8,
 		size:    1,
 	}
-	UINT16 = &FFI_TYPE{
+	UINT16 = &Type{
 		typePtr: &C.ffi_type_uint16,
 		size:    2,
 	}
-	SINT16 = &FFI_TYPE{
+	SINT16 = &Type{
 		typePtr: &C.ffi_type_sint16,
 		size:    2,
 	}
-	UINT32 = &FFI_TYPE{
+	UINT32 = &Type{
 		typePtr: &C.ffi_type_uint32,
 		size:    4,
 	}
-	SINT32 = &FFI_TYPE{
+	SINT32 = &Type{
 		typePtr: &C.ffi_type_sint32,
 		size:    4,
 	}
-	UINT64 = &FFI_TYPE{
+	UINT64 = &Type{
 		typePtr: &C.ffi_type_uint64,
 		size:    8,
 	}
-	SINT64 = &FFI_TYPE{
+	SINT64 = &Type{
 		typePtr: &C.ffi_type_sint64,
 		size:    8,
 	}
-	FLOAT = &FFI_TYPE{
+	FLOAT = &Type{
 		typePtr: &C.ffi_type_float,
 		size:    4,
 	}
-	DOUBLE = &FFI_TYPE{
+	DOUBLE = &Type{
 		typePtr: &C.ffi_type_double,
 		size:    8,
 	}
-	PTR = &FFI_TYPE{
+	PTR = &Type{
 		typePtr: &C.ffi_type_pointer,
 		size:    int(PtrSize),
 	}
@@ -96,11 +97,11 @@ type Cif struct {
 	ptr       *C.ffi_cif
 	fPtr      unsafe.Pointer
 	argsCount int
-	resType   *FFI_TYPE
+	resType   *Type
 }
 
 // 构造一个cif
-func NewCif(fPtr unsafe.Pointer, rType *FFI_TYPE, aTypes ...*FFI_TYPE) (cif *Cif, err error) {
+func NewCif(fPtr unsafe.Pointer, rType *Type, aTypes ...*Type) (cif *Cif, err error) {
 	//申请空间 把cif存到C内存中
 	empty_cif := C.ffi_cif{}
 	cif = &Cif{
@@ -143,7 +144,7 @@ func NewCif(fPtr unsafe.Pointer, rType *FFI_TYPE, aTypes ...*FFI_TYPE) (cif *Cif
 
 // 调用函数 any全部为指向数据的指针
 // 所以args为指针
-func (cif *Cif) Call(args ...any) *FFI_RES {
+func (cif *Cif) Call(args ...any) *Result {
 	if len(args) != cif.argsCount {
 		panic("Wrong args count")
 	}
@@ -175,7 +176,7 @@ func (cif *Cif) Call(args ...any) *FFI_RES {
 		tmpArr := (*[1 << 30]byte)(resPtr)
 		//给res写入数据
 		copy(resArr[:], (*tmpArr)[0:resSize])
-		return &FFI_RES{
+		return &Result{
 			ptr: unsafe.Pointer(&resArr[0]),
 		}
 	} else {
@@ -203,7 +204,7 @@ func Open(name string, flag int) (lib *Lib, err error) {
 }
 
 // dlsym
-func (lib *Lib) Sym(name string, rType *FFI_TYPE, aTypes ...*FFI_TYPE) (*Cif, error) {
+func (lib *Lib) Sym(name string, function any, rType *Type, aTypes ...*Type) (*Cif, error) {
 	//查找函数指针
 	str := C.CString(name)
 	defer C.free(unsafe.Pointer(str))
@@ -216,11 +217,26 @@ func (lib *Lib) Sym(name string, rType *FFI_TYPE, aTypes ...*FFI_TYPE) (*Cif, er
 	if err != nil {
 		return nil, err
 	}
+	// 处理function
+	if function != nil {
+		fnType := reflect.TypeOf(function)
+		fn := reflect.ValueOf(function).Elem()
+
+		var out reflect.Type
+		if fnType.NumOut() > 1 {
+			return nil, fmt.Errorf("C functions can return 0 or 1 values, not %d", fnType.NumOut())
+		} else if fnType.NumOut() == 1 {
+			out = fnType.Out(0)
+		}
+		funcPtr := NewFunction(cif, out)
+		v := reflect.MakeFunc(fn.Type(), funcPtr.Call)
+		fn.Set(v)
+	}
 	return cif, nil
 }
 
-func (lib *Lib) SymMust(name string, rType *FFI_TYPE, aTypes ...*FFI_TYPE) *Cif {
-	cif, err := lib.Sym(name, rType, aTypes...)
+func (lib *Lib) SymMust(name string, rType *Type, aTypes ...*Type) *Cif {
+	cif, err := lib.Sym(name, nil, rType, aTypes...)
 	if err != nil {
 		panic(err)
 	}
@@ -228,62 +244,62 @@ func (lib *Lib) SymMust(name string, rType *FFI_TYPE, aTypes ...*FFI_TYPE) *Cif 
 }
 
 // 返回指针
-func (res *FFI_RES) Pointer() unsafe.Pointer {
+func (res *Result) Pointer() unsafe.Pointer {
 	return *(*unsafe.Pointer)(res.ptr)
 }
 
 // 返回uint8
-func (res *FFI_RES) Uint8() uint8 {
+func (res *Result) Uint8() uint8 {
 	return *(*uint8)(res.ptr)
 }
 
 // 返回int8
-func (res *FFI_RES) Int8() int8 {
+func (res *Result) Int8() int8 {
 	return *(*int8)(res.ptr)
 }
 
 // 返回uint16
-func (res *FFI_RES) Uint16() uint16 {
+func (res *Result) Uint16() uint16 {
 	return *(*uint16)(res.ptr)
 }
 
 // 返回int16
-func (res *FFI_RES) Int16() int16 {
+func (res *Result) Int16() int16 {
 	return *(*int16)(res.ptr)
 }
 
 // 返回uint32
-func (res *FFI_RES) Uint32() uint32 {
+func (res *Result) Uint32() uint32 {
 	return *(*uint32)(res.ptr)
 }
 
 // 返回int32
-func (res *FFI_RES) Int32() int32 {
+func (res *Result) Int32() int32 {
 	return *(*int32)(res.ptr)
 }
 
 // 返回uint64
-func (res *FFI_RES) Uint64() uint64 {
+func (res *Result) Uint64() uint64 {
 	return *(*uint64)(res.ptr)
 }
 
 // 返回int64
-func (res *FFI_RES) Int64() int64 {
+func (res *Result) Int64() int64 {
 	return *(*int64)(res.ptr)
 }
 
 // 返回float32
-func (res *FFI_RES) Float() float32 {
+func (res *Result) Float() float32 {
 	return *(*float32)(res.ptr)
 }
 
 // 返回float64
-func (res *FFI_RES) Double() float64 {
+func (res *Result) Double() float64 {
 	return *(*float64)(res.ptr)
 }
 
 // 返回String
-func (res *FFI_RES) String() string {
+func (res *Result) String() string {
 	ptr := (*C.char)(res.Pointer())
 	return C.GoString(ptr)
 }
