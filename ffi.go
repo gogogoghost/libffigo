@@ -204,7 +204,7 @@ func Open(name string, flag int) (lib *Lib, err error) {
 }
 
 // dlsym
-func (lib *Lib) Sym(name string, function any, rType *Type, aTypes ...*Type) (*Cif, error) {
+func (lib *Lib) SymRaw(name string, rType *Type, aTypes ...*Type) (*Cif, error) {
 	//查找函数指针
 	str := C.CString(name)
 	defer C.free(unsafe.Pointer(str))
@@ -217,30 +217,43 @@ func (lib *Lib) Sym(name string, function any, rType *Type, aTypes ...*Type) (*C
 	if err != nil {
 		return nil, err
 	}
-	// 处理function
-	if function != nil {
-		fnType := reflect.TypeOf(function)
-		fn := reflect.ValueOf(function).Elem()
-
-		var out reflect.Type
-		if fnType.NumOut() > 1 {
-			return nil, fmt.Errorf("C functions can return 0 or 1 values, not %d", fnType.NumOut())
-		} else if fnType.NumOut() == 1 {
-			out = fnType.Out(0)
-		}
-		funcPtr := NewFunction(cif, out)
-		v := reflect.MakeFunc(fn.Type(), funcPtr.Call)
-		fn.Set(v)
-	}
 	return cif, nil
 }
 
-func (lib *Lib) SymMust(name string, rType *Type, aTypes ...*Type) *Cif {
-	cif, err := lib.Sym(name, nil, rType, aTypes...)
+func (lib *Lib) SymRawMust(name string, rType *Type, aTypes ...*Type) *Cif {
+	cif, err := lib.SymRaw(name, rType, aTypes...)
 	if err != nil {
 		panic(err)
 	}
 	return cif
+}
+
+func (lib *Lib) Sym(name string, function any, rType *Type, aTypes ...*Type) error {
+	cif, err := lib.SymRaw(name, rType, aTypes...)
+	if err != nil {
+		return err
+	}
+	// 处理function
+	fnType := reflect.TypeOf(function).Elem()
+	fnValue := reflect.ValueOf(function).Elem()
+	//读取返回值类型
+	var out reflect.Type
+	if fnType.NumOut() > 1 {
+		return fmt.Errorf("C functions can return 0 or 1 values, not %d", fnType.NumOut())
+	} else if fnType.NumOut() == 1 {
+		out = fnType.Out(0)
+	}
+	funcPtr := NewFunction(cif, out)
+	v := reflect.MakeFunc(fnType, funcPtr.Call)
+	fnValue.Set(v)
+	return nil
+}
+
+func (lib *Lib) SymMust(name string, function any, rType *Type, aTypes ...*Type) {
+	err := lib.Sym(name, function, rType, aTypes...)
+	if err != nil {
+		panic(err)
+	}
 }
 
 // 返回指针
@@ -276,6 +289,16 @@ func (res *Result) Uint32() uint32 {
 // 返回int32
 func (res *Result) Int32() int32 {
 	return *(*int32)(res.ptr)
+}
+
+// 返回int
+func (res *Result) Int() int {
+	return *(*int)(res.ptr)
+}
+
+// 返回uint
+func (res *Result) Uint() uint {
+	return *(*uint)(res.ptr)
 }
 
 // 返回uint64
