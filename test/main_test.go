@@ -23,7 +23,12 @@ func TestAbs(t *testing.T) {
 		panic(err)
 	}
 	var abs func(int) int
-	lib.SymMust("abs", &abs, ffi.SINT32, ffi.SINT32)
+	lib.SymMust(
+		"abs",
+		&abs,
+		ffi.SINT32,
+		ffi.SINT32,
+	)
 	fmt.Println(abs(-100))
 }
 
