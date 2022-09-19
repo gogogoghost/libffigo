@@ -26,7 +26,7 @@ func AllocArrayOf[T any](src []T) *T {
 	length := len(src)
 	ptr := AllocArray(length)
 	//转换成数组
-	arr := (*[1 << 30]T)(ptr)
+	arr := Ptr2Arr[T](ptr, length)
 	//把数组内容拷贝过去
 	for index, value := range src {
 		arr[index] = value
@@ -39,8 +39,8 @@ func AllocArray(size int) unsafe.Pointer {
 	//生成一个数组 长度指针字节*长度
 	ptr := C.malloc(C.size_t(int(PtrSize) * (size + 1)))
 	//数组最后一位填0
-	arr := (*[1 << 30]uintptr)(ptr)
-	(*arr)[size] = uintptr(0)
+	arr := Ptr2Arr[uintptr](ptr, size)
+	arr[size] = uintptr(0)
 	return ptr
 }
 
@@ -65,11 +65,11 @@ func AllocValOf(src any) unsafe.Pointer {
 	realSize := val.Type().Size()
 	//申请空间
 	destPtr := C.malloc(C.size_t(realSize))
-	destArr := (*[1 << 30]byte)(destPtr)
+	destArr := Ptr2Arr[byte](destPtr, int(realSize))
 	//获取src的指针 转换成数组
-	srcArr := (*[1 << 30]byte)(dataPtr)
+	srcArr := Ptr2Arr[byte](dataPtr, int(realSize))
 	//按字节加上偏移量拷贝
-	copy(destArr[0:realSize], srcArr[0:realSize])
+	copy(destArr, srcArr)
 	return destPtr
 }
 
@@ -86,10 +86,10 @@ func FreePtr(ptr unsafe.Pointer) {
 
 // 把一个指针指向的东西按字节数量
 func PrintPtr(ptr unsafe.Pointer, size int) {
-	arr := (*[1 << 30]byte)(ptr)
+	arr := Ptr2Arr[byte](ptr, size)
 	var buf = []byte{}
 	for i := 0; i < size; i++ {
-		buf = append(buf, (*arr)[i])
+		buf = append(buf, arr[i])
 	}
 	fmt.Println(hex.EncodeToString(buf))
 }
@@ -101,27 +101,41 @@ func AllocParams(args []any) *unsafe.Pointer {
 	//申请一片数组空间
 	arrPtr := AllocArray(count)
 	//转换成指针数组
-	arr := (*[1 << 30]unsafe.Pointer)(arrPtr)
+	arr := Ptr2Arr[unsafe.Pointer](arrPtr, count)
 	//给数组写入指对应C内存的地址
 	for index, arg := range args {
 		// 给每个变量单独申请空间
 		ptr := AllocValOf(arg)
 		// defer FreePtr(ptr)
-		(*arr)[index] = ptr
+		arr[index] = ptr
 	}
-	argp = &((*arr)[0])
+	argp = &(arr[0])
 	return argp
 }
 
 // 释放void** 并将数组内的所有内存释放
 func FreeParams(ptr *unsafe.Pointer) {
 	arrPtr := unsafe.Pointer(ptr)
-	arr := (*[1 << 30]unsafe.Pointer)(arrPtr)
-	for _, p := range arr {
-		if uintptr(p) == 0 {
+	ptrAddr := uintptr(arrPtr)
+	for {
+		//取出指针指向数据
+		dataPtr := *(*unsafe.Pointer)(unsafe.Pointer(ptrAddr))
+		//0表示数组末尾了
+		if uintptr(dataPtr) == 0 {
 			break
 		}
-		C.free(p)
+		C.free(dataPtr)
+		ptrAddr += PtrSize
 	}
 	C.free(arrPtr)
+}
+
+// ptr->[]T
+func Ptr2Arr[T any](ptr unsafe.Pointer, length int) []T {
+	sliceHeader := struct {
+		p   unsafe.Pointer
+		len int
+		cap int
+	}{ptr, length + 1, length + 1}
+	return *(*[]T)(unsafe.Pointer(&sliceHeader))
 }

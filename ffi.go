@@ -173,9 +173,9 @@ func (cif *Cif) Call(args ...any) *Result {
 	)
 	if resSize > 0 {
 		//返回复制后的地址
-		tmpArr := (*[1 << 30]byte)(resPtr)
+		tmpArr := Ptr2Arr[byte](resPtr, resSize)
 		//给res写入数据
-		copy(resArr[:], (*tmpArr)[0:resSize])
+		copy(resArr, tmpArr)
 		return &Result{
 			ptr: unsafe.Pointer(&resArr[0]),
 		}
