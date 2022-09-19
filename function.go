@@ -18,7 +18,7 @@ func NewFunction(cif *Cif, outType reflect.Type) *Function {
 	}
 }
 
-func (self *Function) Call(rawArgs []reflect.Value) []reflect.Value {
+func (obj *Function) Call(rawArgs []reflect.Value) []reflect.Value {
 	args := []any{}
 	for _, arg := range rawArgs {
 		var r any
@@ -53,6 +53,7 @@ func (self *Function) Call(rawArgs []reflect.Value) []reflect.Value {
 		case reflect.String:
 			strPtr := C.CString(arg.String())
 			defer FreePtr(unsafe.Pointer(strPtr))
+			r = strPtr
 			// ptr
 		case reflect.Pointer, reflect.UnsafePointer:
 			r = arg.Pointer()
@@ -60,12 +61,12 @@ func (self *Function) Call(rawArgs []reflect.Value) []reflect.Value {
 		}
 		args = append(args, r)
 	}
-	res := self.cif.Call(args...)
-	if self.outType == nil {
+	res := obj.cif.Call(args...)
+	if obj.outType == nil {
 		return []reflect.Value{}
 	}
 	var r any
-	switch self.outType.Kind() {
+	switch obj.outType.Kind() {
 	// int
 	case reflect.Int8:
 		r = res.Int8()

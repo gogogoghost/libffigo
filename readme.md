@@ -1,5 +1,7 @@
 ## libffigo
 
+[![GoDoc](https://godoc.org/github.com/gogogoghost/libffigo?status.svg)](https://godoc.org/github.com/gogogoghost/libffigo)
+
 dynamic loading library with libffi support go 1.19
 
 ### usage

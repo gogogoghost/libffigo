@@ -137,7 +137,7 @@ func NewCif(fPtr unsafe.Pointer, rType *Type, aTypes ...*Type) (cif *Cif, err er
 		argsPtr,
 	)
 	if ret != C.FFI_OK {
-		return nil, errors.New(fmt.Sprintf("prep fail:%d", ret))
+		return nil, fmt.Errorf("prep fail:%d", ret)
 	}
 	return cif, nil
 }
@@ -239,7 +239,7 @@ func (lib *Lib) Sym(name string, function any, rType *Type, aTypes ...*Type) err
 	//读取返回值类型
 	var out reflect.Type
 	if fnType.NumOut() > 1 {
-		return fmt.Errorf("C functions can return 0 or 1 values, not %d", fnType.NumOut())
+		return fmt.Errorf("c functions can return 0 or 1 values, not %d", fnType.NumOut())
 	} else if fnType.NumOut() == 1 {
 		out = fnType.Out(0)
 	}

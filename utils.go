@@ -28,9 +28,7 @@ func AllocArrayOf[T any](src []T) *T {
 	//转换成数组
 	arr := Ptr2Arr[T](ptr, length)
 	//把数组内容拷贝过去
-	for index, value := range src {
-		arr[index] = value
-	}
+	copy(arr[0:], src)
 	return &arr[0]
 }
 
