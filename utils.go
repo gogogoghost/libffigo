@@ -3,8 +3,6 @@ package ffi
 //#include <stdlib.h>
 import "C"
 import (
-	"encoding/hex"
-	"fmt"
 	"reflect"
 	"unsafe"
 )
@@ -25,10 +23,10 @@ type AnyStruct struct {
 func AllocArrayOf[T any](src []T) *T {
 	length := len(src)
 	ptr := AllocArray(length)
-	//转换成数组
+	//转换成对应类型的数组
 	arr := Ptr2Arr[T](ptr, length)
 	//把数组内容拷贝过去
-	copy(arr[0:], src)
+	copy(arr[:], src)
 	return &arr[0]
 }
 
@@ -67,7 +65,11 @@ func AllocValOf(src any) unsafe.Pointer {
 	//获取src的指针 转换成数组
 	srcArr := Ptr2Arr[byte](dataPtr, int(realSize))
 	//按字节加上偏移量拷贝
-	copy(destArr, srcArr)
+	/*
+		由于数据本来不是数组，转成数组好拷贝，所以内存布局并没有末尾的0
+		必须强制指定要拷贝的长度，否则容易拷贝越界
+	*/
+	copy(destArr[0:realSize], srcArr[0:realSize])
 	return destPtr
 }
 
@@ -82,16 +84,6 @@ func FreePtr(ptr unsafe.Pointer) {
 	C.free(ptr)
 }
 
-// 把一个指针指向的东西按字节数量
-func PrintPtr(ptr unsafe.Pointer, size int) {
-	arr := Ptr2Arr[byte](ptr, size)
-	var buf = []byte{}
-	for i := 0; i < size; i++ {
-		buf = append(buf, arr[i])
-	}
-	fmt.Println(hex.EncodeToString(buf))
-}
-
 // 把any[] 转void*
 func AllocParams(args []any) *unsafe.Pointer {
 	count := len(args)
@@ -104,7 +96,6 @@ func AllocParams(args []any) *unsafe.Pointer {
 	for index, arg := range args {
 		// 给每个变量单独申请空间
 		ptr := AllocValOf(arg)
-		// defer FreePtr(ptr)
 		arr[index] = ptr
 	}
 	argp = &(arr[0])

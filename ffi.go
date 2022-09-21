@@ -161,7 +161,7 @@ func (cif *Cif) Call(args ...any) *Result {
 		//申请用于存放临时返回值的空间
 		resPtr = Alloc(resSize)
 		defer FreePtr(resPtr)
-		//再申请一片go空间 存放拷贝后的数据
+		//再申请一片go空间 存放拷贝后的数据 该空间受GC管理
 		resArr = make([]byte, resSize)
 	}
 	//发起调用
